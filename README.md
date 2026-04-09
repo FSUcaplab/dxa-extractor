@@ -16,6 +16,7 @@ Developed at the **Cardiovascular and Applied Physiology (CAP) Lab**, Florida St
 - **Fixes Hologic font encoding bug** — some Hologic PDFs produce doubled characters (`RReeggiioonn`, `11229977..11`). The tool detects and corrects this automatically before parsing
 - **~96 fields extracted per timepoint** including regional fat/lean mass, BMC, BMD, T/Z-scores, Android/Gynoid regions, VAT mass/volume/area, and adipose indices
 
+![ImageGUI](ImageGUI.png)
 ---
 
 ## Extracted Fields
