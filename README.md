@@ -50,7 +50,7 @@ pip install -r requirements.txt
 ## Installation
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/dxa-extractor.git
+git clone https://github.com/Jonathan-Hoch/dxa-extractor.git
 cd dxa-extractor
 pip install -r requirements.txt
 python dxa_extractor_gui.py
