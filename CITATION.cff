@@ -1,0 +1,30 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+title: "DXA Data Extractor"
+type: software
+authors:
+  - family-names: Hoch
+    given-names: "Jonathan W."
+    orcid: "https://orcid.org/0000-0002-4992-1199"
+    affiliation: "Cardiovascular and Applied Physiology Laboratory, Florida State University"
+repository-code: "https://github.com/FSUcaplab/analysis-dxa-pdf"
+url: "https://github.com/FSUcaplab/analysis-dxa-pdf"
+license: MIT
+date-released: 2026-07-02
+abstract: >-
+  Desktop GUI tool for batch-extracting body composition and bone density data
+  from Hologic DXA PDF summary reports into a single CSV file, built for
+  longitudinal research studies with pre/post or multi-timepoint scan designs.
+  Auto-detects timepoints and all four Hologic summary report variants,
+  corrects the Hologic doubled-character font encoding bug, and extracts
+  approximately 96 fields per timepoint including regional fat and lean mass,
+  bone mineral content and density, T- and Z-scores, android and gynoid
+  regions, and visceral adipose tissue measures.
+keywords:
+  - dual-energy X-ray absorptiometry
+  - DXA
+  - body composition
+  - bone mineral density
+  - visceral adipose tissue
+  - PDF data extraction
+  - research data management

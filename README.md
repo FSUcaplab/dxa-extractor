@@ -146,3 +146,32 @@ MIT License. See `LICENSE` for details.
 ## Citation
 
 If you use this tool in published research, please cite the CAP Lab, Florida State University, and link to this repository.
+
+---
+
+## How to cite
+
+This repository includes a [`CITATION.cff`](CITATION.cff) file, so GitHub shows a
+**"Cite this repository"** button in the sidebar (APA and BibTeX).
+
+For reference managers, use the ready-made export files:
+
+| File | Use with |
+|---|---|
+| [`CITATION.ris`](CITATION.ris) | EndNote, Zotero, Mendeley, RefWorks |
+| [`CITATION.bib`](CITATION.bib) | BibTeX / LaTeX |
+| [`CITATION.cff`](CITATION.cff) | the source of truth the other two are generated from |
+
+Please cite the software record. If this tool contributed to a publication,
+citing it here is what makes the analysis reproducible by others.
+
+`CITATION.cff` is the source of truth; the `.ris` and `.bib` are generated from
+it with the CAP Lab `cff2ris.py` converter. Regenerate them after any edit:
+
+```bash
+python cff2ris.py CITATION.cff
+```
+
+(The general-purpose [`cffconvert`](https://github.com/citation-file-format/cffconvert)
+tool will also read this file, but it ignores `preferred-citation` and so emits
+only the software record, without the journal, volume, pages, or DOI.)
