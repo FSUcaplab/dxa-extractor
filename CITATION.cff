@@ -7,8 +7,8 @@ authors:
     given-names: "Jonathan W."
     orcid: "https://orcid.org/0000-0002-4992-1199"
     affiliation: "Cardiovascular and Applied Physiology Laboratory, Florida State University"
-repository-code: "https://github.com/FSUcaplab/analysis-dxa-pdf"
-url: "https://github.com/FSUcaplab/analysis-dxa-pdf"
+repository-code: "https://github.com/FSUcaplab/dxa-extractor"
+url: "https://github.com/FSUcaplab/dxa-extractor"
 license: MIT
 date-released: 2026-07-02
 abstract: >-
