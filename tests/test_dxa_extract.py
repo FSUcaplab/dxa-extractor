@@ -118,3 +118,52 @@ def test_timepoints_come_from_dxa_and_dexa_folders(tmp_path):
 
 def test_dropped_path_quotes_are_removed():
     assert dx._clean_dropped_path('"C:/Study Data/IMST"\n') == Path("C:/Study Data/IMST")
+
+
+class FakePage:
+    """Stands in for a pdfplumber page: words laid out as (text, x0, top)."""
+
+    def __init__(self, words):
+        self.words = [{"text": t, "x0": x, "x1": x + 5 * len(t), "top": top} for t, x, top in words]
+
+    def extract_words(self):
+        return self.words
+
+
+BMD_HEADER_WORDS = [("Region", 40, 100), ("Area", 90, 100), ("BMC", 140, 100), ("BMD", 190, 100),
+                    ("T", 240, 100), ("-", 247, 100), ("Z", 280, 100), ("-", 287, 100)]
+
+
+def test_both_scores_placed_by_column():
+    page = FakePage(BMD_HEADER_WORDS + [("Total", 40, 200), ("2001.78", 90, 200), ("2368.32", 140, 200),
+                                        ("1.183", 190, 200), ("0.9", 238, 200), ("-0.4", 278, 200)])
+    assert dx.total_scores(page) == {"T_score": "0.9", "Z_score": "-0.4"}
+
+
+def test_lone_score_under_the_z_column_is_the_z_score():
+    page = FakePage(BMD_HEADER_WORDS + [("Total", 40, 200), ("2023.23", 90, 200), ("2327.20", 140, 200),
+                                        ("1.150", 190, 200), ("0.1", 278, 200)])
+    assert dx.total_scores(page) == {"Z_score": "0.1"}
+
+
+def test_lone_score_is_not_guessed_from_text_alone():
+    scan = read("Region Area BMC BMD T - Z -\nTotal 2023.23 2327.20 1.150 0.1")
+    assert "Total_T_score" not in scan.values()
+    assert "Total_Z_score" not in scan.values()
+
+
+def test_study_folder_dragged_in_by_mistake(tmp_path):
+    for folder in ["Participant Data/140/1Pre-Training/DXA", "Participant Data/141/1Pre-Training/DXA",
+                   "Analysis/figures"]:
+        (tmp_path / folder).mkdir(parents=True)
+    for pid in ("140", "141"):
+        (tmp_path / "Participant Data" / pid / "1Pre-Training" / "DXA" / "page1.pdf").write_bytes(b"")
+    assert dx.participant_root(tmp_path) == tmp_path / "Participant Data"
+    assert dx.participant_root(tmp_path / "Participant Data") == tmp_path / "Participant Data"
+
+
+def test_single_participant_root_is_left_alone(tmp_path):
+    for folder in ["IMST_130/W0/DXA", "IMST_130/W8/DXA"]:
+        (tmp_path / folder).mkdir(parents=True)
+        (tmp_path / folder / "page1.pdf").write_bytes(b"")
+    assert dx.participant_root(tmp_path) == tmp_path

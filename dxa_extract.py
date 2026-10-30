@@ -49,6 +49,8 @@ class ReportTable:
 # One Hologic export prints the same numbers on several pages at different
 # precision: the indices page rounds masses to whole grams, the composition
 # page gives one decimal. Ranking the tables keeps the precise copy.
+BMD_HEADER = re.compile(r"Region\s+Area\s+BMC\s+BMD")
+
 TABLES = [
     ReportTable("composition",
                 re.compile(r"Region\s+BMC\s+Fat\s+Lean\s+Lean\s*\+\s*Total\s+%\s*Fat"),
@@ -56,7 +58,7 @@ TABLES = [
                 COMPOSITION_COLUMNS,
                 rank=3),
     ReportTable("bone density",
-                re.compile(r"Region\s+Area\s+BMC\s+BMD"),
+                BMD_HEADER,
                 BMD_REGIONS,
                 BMD_COLUMNS,
                 rank=3),
@@ -170,10 +172,40 @@ class Scan:
         return out
 
 
-def page_text(page) -> str:
-    # Some exports draw every glyph twice at the same position, which a plain
-    # text extraction returns as "RReeggiioonn"; dedupe_chars removes the copy.
-    return page.dedupe_chars().extract_text() or ""
+def total_scores(page) -> dict[str, str]:
+    """The bone density Total row's T- and Z-score, placed by column position.
+
+    Hologic leaves the T-score blank for anyone under 20, so a Total row that
+    carries one score can only be read by where that score sits.
+    """
+    lines: dict[int, list[dict]] = {}
+    for w in page.extract_words():
+        lines.setdefault(round(w["top"]), []).append(w)
+    rows = [sorted(ws, key=lambda w: w["x0"]) for _, ws in sorted(lines.items())]
+
+    centres = {}
+    for row in rows:
+        texts = [w["text"] for w in row]
+        if "BMD" in texts and "T" in texts and "Z" in texts:
+            for w in row:
+                if w["text"] in ("T", "Z"):
+                    centres[f"{w['text']}_score"] = (w["x0"] + w["x1"]) / 2
+            break
+    if len(centres) < 2:
+        return {}
+
+    for row in rows:
+        if row[0]["text"] != "Total":
+            continue
+        numbers = [w for w in row[1:] if NUMBER.match(w["text"])]
+        if len(numbers) < 3:
+            continue
+        scores = {}
+        for w in numbers[3:]:
+            x = (w["x0"] + w["x1"]) / 2
+            scores[min(centres, key=lambda k: abs(centres[k] - x))] = w["text"]
+        return scores
+    return {}
 
 
 def table_rows(text: str, regions: list[str], n_values: int) -> dict[str, tuple[list[str], bool]]:
@@ -199,7 +231,12 @@ def table_rows(text: str, regions: list[str], n_values: int) -> dict[str, tuple[
     return rows
 
 
-def read_page(scan: Scan, text: str, source: str) -> None:
+def read_page(scan: Scan, text: str, source: str, scores: dict[str, str] | None = None) -> None:
+    """Add one page's values to the scan.
+
+    `scores` is the bone density Total row's T- and Z-score from `total_scores`.
+    Without it, the scores are taken only when both are printed.
+    """
     for name, pattern in METADATA:
         m = re.search(pattern, text)
         if m and name not in scan.metadata:
@@ -213,11 +250,13 @@ def read_page(scan: Scan, text: str, source: str) -> None:
             continue
         scan.tables_found.add(table.name)
         for region, (numbers, footnoted) in table_rows(text, table.regions, len(table.columns)).items():
-            columns = table.columns
-            if table.name == "bone density" and region == "Total" and len(numbers) >= 5:
-                columns = columns + ["T_score", "Z_score"]
-            for column, token in zip(columns, numbers):
+            for column, token in zip(table.columns, numbers):
                 scan.add(_key(region, column), token, table.rank, source)
+            if table.name == "bone density" and region == "Total":
+                if scores is None and len(numbers) >= 5:
+                    scores = {"T_score": numbers[3], "Z_score": numbers[4]}
+                for column, token in (scores or {}).items():
+                    scan.add(_key(region, column), token, table.rank, source)
             if footnoted:
                 scan.mirrored.add(region)
 
@@ -233,17 +272,24 @@ def read_pdfs(pdfs: list[Path], log=print) -> Scan:
     for pdf_path in pdfs:
         try:
             with pdfplumber.open(pdf_path) as pdf:
-                texts = [page_text(p) for p in pdf.pages]
+                pages = []
+                for page in pdf.pages:
+                    # Some exports draw every glyph twice at the same position, which
+                    # plain extraction returns as "RReeggiioonn"; dedupe_chars drops the copy.
+                    page = page.dedupe_chars()
+                    text = page.extract_text() or ""
+                    scores = total_scores(page) if BMD_HEADER.search(text) else None
+                    pages.append((text, scores))
         except Exception as exc:
             scan.warnings.append(f"{pdf_path.name}: could not be opened ({exc})")
             log(f"      {pdf_path.name}: could not be opened ({exc})")
             continue
-        if not any(t.strip() for t in texts):
+        if not any(text.strip() for text, _ in pages):
             log(f"      {pdf_path.name}: no text layer (a scanned image?), skipped")
             continue
         before = set(scan.tables_found)
-        for text in texts:
-            read_page(scan, text, pdf_path.name)
+        for text, scores in pages:
+            read_page(scan, text, pdf_path.name, scores)
         found = sorted(scan.tables_found - before)
         log(f"      {pdf_path.name}: {', '.join(found) if found else 'no results table'}")
     check(scan)
@@ -312,6 +358,26 @@ def find_timepoints(participant_dir: Path) -> list[tuple[str, Path, list[Path]]]
     return found
 
 
+def participant_root(root: Path) -> Path:
+    """The folder that actually holds the participant folders.
+
+    A study folder is easy to drag in by mistake. If only one folder inside it
+    holds DXA folders, and they sit two or more levels down in several of its
+    subfolders (participant / visit / DXA), that folder is the real root.
+    """
+    while True:
+        with_scans = [(child, find_timepoints(child)) for child in sorted(root.iterdir())
+                      if child.is_dir() and not child.name.startswith(".")]
+        with_scans = [(child, tps) for child, tps in with_scans if tps]
+        if len(with_scans) != 1:
+            return root
+        child, timepoints = with_scans[0]
+        parts = [folder.relative_to(child).parts for _, folder, _ in timepoints]
+        if len({p[0] for p in parts}) < 2 or min(len(p) for p in parts) < 3:
+            return root
+        root = child
+
+
 def match_participants(root: Path, ids: list[str]) -> tuple[list[Path], list[str]]:
     """Participant folders matching each ID. "130" matches IMST_130 but not IMST_1300."""
     folders = sorted(p for p in root.iterdir() if p.is_dir() and not p.name.startswith("."))
@@ -338,7 +404,10 @@ def _format(value) -> str:
 
 
 def extract(root: Path, ids: list[str], out_path: Path, log=print) -> int:
-    participants, unmatched = match_participants(root, ids)
+    found = participant_root(root)
+    if found != root:
+        log(f"The participant folders are inside '{found.relative_to(root)}'; reading from there.\n")
+    participants, unmatched = match_participants(found, ids)
     for entry in unmatched:
         log(f"No participant folder matches '{entry}'")
 
