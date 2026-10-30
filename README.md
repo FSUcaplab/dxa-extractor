@@ -1,151 +1,141 @@
 # DXA Data Extractor
 
-A desktop GUI tool for batch-extracting body composition and bone density data from **Hologic DXA** PDF summary reports into a single CSV file. Built for longitudinal research studies with pre/post or multi-timepoint scan designs.
+Batch-extracts body composition and bone density results from **Hologic DXA** PDF reports into one CSV, one row per participant and timepoint. Built for longitudinal studies with pre/post or multi-timepoint scan designs.
 
 Developed at the **Cardiovascular and Applied Physiology (CAP) Lab**, Florida State University.
 
 ---
 
-## Features
+## What it does
 
-- **Point-and-click GUI** — no command-line usage required
-- **Batch processing** — extract dozens of participants in one click
-- **Partial ID matching** — type `130, 131, 134` and it finds `IMST_130`, `IMST_131`, etc. automatically
-- **Auto-detects timepoints** — walks each participant folder and finds every subfolder with "DXA" in its name (e.g. `W0/DXA`, `W8/DXA`, `Pre/DXA`, `Post/DXA`). Each timepoint becomes its own row in the output
-- **Auto-detects report type** — handles all four Hologic summary report variants (body composition + VAT, full comp with BMC, BMD/bone density, lean/fat summary) from the same run
-- **Fixes Hologic font encoding bug** — some Hologic PDFs produce doubled characters (`RReeggiioonn`, `11229977..11`). The tool detects and corrects this automatically before parsing
-- **~96 fields extracted per timepoint** including regional fat/lean mass, BMC, BMD, T/Z-scores, Android/Gynoid regions, VAT mass/volume/area, and adipose indices
-
-![ImageGUI](ImageGUI.png)
----
-
-## Extracted Fields
-
-| Category | Fields |
-|---|---|
-| **Metadata** | Participant ID, Timepoint, Scan Date, Scan ID, Sex, Age, Height, Weight |
-| **Regional Body Comp** | Fat Mass, Lean+BMC, Total Mass, % Fat for: L/R Arm, Trunk, L/R Leg, Subtotal, Head, Total |
-| **Full Body Comp** (DXA4) | + BMC (g) and Lean Mass (g) per region |
-| **Android / Gynoid** | Fat Mass, Lean+BMC, Total Mass, % Fat |
-| **VAT** | Est. VAT Mass (g), Volume (cm³), Area (cm²) |
-| **Adipose Indices** | Android/Gynoid Ratio, % Fat Trunk/Legs Ratio, Trunk/Limb Fat Ratio |
-| **Lean Indices** | Lean/Height² (kg/m²), Appendicular Lean/Height² (kg/m²) |
-| **BMD** | Area (cm²), BMC (g), BMD (g/cm²) per region + Total T-score and Z-score |
+- **Reads every report table**: whole-body composition (BMC, fat, lean, lean + BMC, total mass, % fat by region), bone density (area, BMC, BMD by region, total T- and Z-score), android and gynoid fat, VAT mass, volume and area, and the adipose and lean indices.
+- **Keeps the precise copy of each number.** Hologic prints regional masses on more than one page, to whole grams on the summary page and to 0.1 g on the composition page. The tool takes the most precise copy, and it raises a warning if two pages disagree by more than rounding.
+- **Checks the report's own arithmetic.** Limbs + trunk = Subtotal, Subtotal + Head = Total, Fat + Lean + BMC = Total, and total mass against the weight entered at the scanner. A failed check means a number was misread, and it is reported rather than hidden.
+- **Flags mirrored limbs.** When a limb falls outside the scan field, Hologic copies the opposite side and marks the region with a superscript (`L Arm¹`). Those values are estimated rather than measured, and the tool lists them in `Mirrored_Regions`.
+- **Handles overprinted reports.** Some exports draw every character twice, so plain text extraction reads `RReeggiioonn`. Duplicate glyphs are removed by position before the text is read.
+- Pages are identified by their content, so PDF filenames and page order do not matter, and order forms or other paperwork in the same folder are skipped.
 
 ---
 
-## Requirements
+## Install
 
-- Python 3.9 or higher
-- `tkinter` (included with standard Python on Windows and macOS; see [Linux note](#linux) below)
-
-Install dependencies:
-
-```bash
-pip install -r requirements.txt
-```
-
----
-
-## Installation
+Python 3.9 or newer.
 
 ```bash
 git clone https://github.com/FSUcaplab/dxa-extractor.git
-cd analysis-dxa-pdf
+cd dxa-extractor
 pip install -r requirements.txt
-python dxa_extractor_gui.py
 ```
 
 ---
 
-## Usage
+## Run
 
-1. **Root Data Folder** — select the folder that contains all your participant subfolders (e.g. the folder where `IMST_27`, `IMST_130`, etc. live)
-2. **Output Folder** — select where the results CSV should be saved
-3. **Participant IDs** — type the IDs you want to process, comma or newline separated:
-   - Partial IDs work: `130, 131, 134` will match `IMST_130`, `IMST_131`, `IMST_134`
-   - Full folder names also work: `IMST_130, IMST_131`
-   - Or click **AUTO-DETECT FROM ROOT FOLDER** to populate all participant folders automatically
-4. Click **▶ EXTRACT DXA DATA**
+### Interactive
 
-The log panel shows exactly which folders were found, which PDF report types were detected, and flags anything that couldn't be parsed.
+```bash
+python dxa_extract.py
+```
+
+The tool asks three questions:
+
+1. **The root folder.** Drag the folder that holds the participant folders into the terminal window, then press Enter.
+2. **Participant IDs.** Type them separated by commas or spaces (`130, 131, 134`), or press Enter for everyone.
+3. **Where to save the CSV.** Press Enter to save `DXA_Extraction_Results.csv` in the root folder.
+
+### Command line
+
+```bash
+python dxa_extract.py "D:/Study/Participant Data"
+python dxa_extract.py "D:/Study/Participant Data" --ids 130 131 134 -o dxa_results.csv
+```
+
+| Option | Meaning |
+|---|---|
+| `root` | folder holding one folder per participant |
+| `--ids` | participant IDs or folder names; default is every participant |
+| `-o`, `--output` | CSV to write; default is `DXA_Extraction_Results.csv` in the root folder |
+
+The exit status is 0 when at least one timepoint was written, so the tool can run inside a script.
+
+A numeric ID matches the whole number in a folder name: `130` matches `IMST_130` and `IMST_0130`, never `IMST_1300`. Any other entry matches a folder name exactly, or else any folder whose name contains it.
 
 ---
 
-## Expected Folder Structure
+## Folder structure
 
-The tool is flexible — it walks the entire participant folder recursively and picks up any subfolder with `dxa` (case-insensitive) in its name. For example:
+Inside each participant folder, every subfolder whose name contains `DXA` or `DEXA` (any case) is one timepoint, and the PDFs directly inside it are that timepoint's report pages.
 
 ```
-Root Data Folder/
+Participant Data/
 ├── IMST_130/
 │   ├── W0/
 │   │   └── DXA/
-│   │       ├── DXA1.pdf
-│   │       ├── DXA2.pdf
-│   │       ├── DXA3.pdf
-│   │       └── DXA4.pdf
+│   │       ├── IMST_130_W0_Page1.pdf
+│   │       ├── IMST_130_W0_Page2.pdf
+│   │       ├── IMST_130_W0_Page3.pdf
+│   │       └── IMST_130_W0_Page4.pdf
 │   └── W8/
 │       └── DXA/
-│           ├── DXA1.pdf
-│           └── DXA2.pdf
-├── IMST_131/
-│   └── Pre/
-│       └── DXA/
-│           └── DXA1.pdf
+│           └── ...
+└── IMST_131/
+    └── Pre/
+        └── DEXA/
+            └── ...
 ```
 
-Output CSV row labels would be:
-- `IMST_130` · `W0_DXA`
-- `IMST_130` · `W8_DXA`
-- `IMST_131` · `Pre_DXA`
-
-PDF filenames inside the DXA folder can be anything — the tool detects report type from content, not filename.
+These give the timepoints `W0_DXA` and `W8_DXA` for `IMST_130`, and `Pre_DEXA` for `IMST_131`.
 
 ---
 
 ## Output
 
-A single `.csv` file with one row per participant × timepoint. Key identifier columns (`Participant_ID`, `Timepoint`, `Scan_Date`, `Sex`, `Age`, `Height_in`, `Weight_lb`) appear first, followed by all extracted measurement columns.
+One row per participant × timepoint, with a fixed set of columns so that files from different runs line up:
 
----
-
-## Compatibility
-
-Tested on Hologic Horizon W DXA system, software version 13.6.x. The four report variants handled are:
-
-| Report | Content |
+| Columns | Content |
 |---|---|
-| Body Composition + VAT | Regional fat/lean, Android/Gynoid, VAT, adipose/lean indices |
-| Full Body Comp with BMC | Regional fat, lean, BMC, Lean+BMC, Total |
-| BMD / Bone Density | Regional area, BMC, BMD, Total T-score and Z-score |
-| Lean/Fat Summary | Regional fat, Lean+BMC, % Fat |
+| `Participant_ID`, `Timepoint`, `Scan_Date`, `Scan_ID`, `Sex`, `Age`, `Ethnicity`, `Height_in`, `Weight_lb` | identification, as printed on the report |
+| `{Region}_BMC_g`, `_Fat_Mass_g`, `_Lean_Mass_g`, `_Lean_plus_BMC_g`, `_Total_Mass_g`, `_Pct_Fat` | L Arm, R Arm, Trunk, L Leg, R Leg, Subtotal, Head, Total |
+| `Android_*`, `Gynoid_*` | fat mass, lean + BMC, total mass, % fat |
+| `Total_Body_Pct_Fat`, `Fat_Mass_Height2_kg_m2`, `Android_Gynoid_Ratio`, `Pct_Fat_Trunk_Legs_Ratio`, `Trunk_Limb_Fat_Ratio` | adipose indices |
+| `VAT_Mass_g`, `VAT_Volume_cm3`, `VAT_Area_cm2` | estimated visceral adipose tissue |
+| `Lean_Height2_kg_m2`, `Appen_Lean_Height2_kg_m2` | lean indices |
+| `{Region}_Area_cm2`, `{Region}_BMD_g_cm2`, `Total_T_score`, `Total_Z_score` | bone density, including ribs, spine and pelvis |
+| `Analysis_Version` | Hologic software version that analysed the scan |
+| `Mirrored_Regions` | regions the scanner copied from the opposite side |
+| `Warnings` | every failed check for that timepoint; empty when the report is internally consistent |
+| `Source_Folder` | folder the values came from |
+
+The patient name and date of birth printed on the report are not written to the CSV.
+
+**Read the `Warnings` column before using the data.** Typical entries are a folder that holds more than one scan, two pages that disagree, a report with no composition page, or a total mass more than 5% from the entered weight.
 
 ---
 
-## Linux
+## Accuracy
 
-`tkinter` is not always included in Python on Linux. Install it with:
+The tool was checked on 77 whole-body scans from two CAP Lab studies, against an independent parser that reproduces the studies' hand-entered values exactly. All 4,466 values the two parsers share matched, and so did every mirrored-limb flag.
+
+Tested on a Hologic Horizon W, software version 13.6. Other models and software versions may lay out their reports differently. If a table is missing from the output, the terminal log shows which tables were found in each PDF.
+
+To run the tests:
 
 ```bash
-# Ubuntu / Debian
-sudo apt install python3-tk
-
-# Fedora
-sudo dnf install python3-tkinter
+pip install pytest
+python -m pytest tests
 ```
+
+---
+
+## Changes in 2.0
+
+Version 1 was a desktop window (`dxa_extractor_gui.py`). On the Horizon W reports above it missed BMC and lean mass, because it did not recognise the composition page. It also took regional total mass from the whole-gram summary page. Version 2 replaces it with a terminal tool, reads every table, and adds the checks and warnings described above. Column names are unchanged for the values version 1 extracted.
 
 ---
 
 ## License
 
-MIT License. See `LICENSE` for details.
-
----
-
-## Citation
-
-If you use this tool in published research, please cite the CAP Lab, Florida State University, and link to this repository.
+MIT License. See `LICENSE`.
 
 ---
 

@@ -2,9 +2,10 @@ TY  - COMP
 TI  - DXA Data Extractor
 AU  - Hoch, Jonathan W.
 PY  - 2026
-DA  - 2026/07/02/
+DA  - 2026/10/30/
+ET  - 2.0.0
 UR  - https://github.com/FSUcaplab/dxa-extractor
-AB  - Desktop GUI tool for batch-extracting body composition and bone density data from Hologic DXA PDF summary reports into a single CSV file, built for longitudinal research studies with pre/post or multi-timepoint scan designs. Auto-detects timepoints and all four Hologic summary report variants, corrects the Hologic doubled-character font encoding bug, and extracts approximately 96 fields per timepoint including regional fat and lean mass, bone mineral content and density, T- and Z-scores, android and gynoid regions, and visceral adipose tissue measures.
+AB  - Command-line tool for batch-extracting body composition and bone density results from Hologic DXA PDF reports into a single CSV file, built for longitudinal research studies with pre/post or multi-timepoint scan designs. Identifies report pages by content, reads regional fat, lean and bone mineral content, bone mineral density with T- and Z-scores, android and gynoid regions, visceral adipose tissue and the adipose and lean indices, keeps the most precise printed copy of each value, flags limbs the scanner mirrored from the opposite side, and checks each report's internal arithmetic.
 KW  - dual-energy X-ray absorptiometry
 KW  - DXA
 KW  - body composition
